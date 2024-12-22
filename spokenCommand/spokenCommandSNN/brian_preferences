@@ -1,0 +1,5 @@
+logging.file_log = False
+codegen.target = 'numpy'
+logging.save_script = False
+devices.cpp_standalone.openmp_threads = 4
+
