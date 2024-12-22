@@ -2,7 +2,7 @@ Code for the paper [Boeshertz, G., Indiveri, G., Nair, M., & Renner, A. (2024). 
 ](https://ieeexplore.ieee.org/abstract/document/10766521)
 
 
-### Currently, the repo only includes ANN and Brian2 simulations, for Loihi code, please contact us. 
+### Currently, the repo only includes ANN and Brian2 simulations, for Loihi code please contact us. 
 
 ## Installation
 
