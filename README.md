@@ -1,4 +1,5 @@
-###Code for the paper [Boeshertz, G., Indiveri, G., Nair, M., & Renner, A. (2024). Accurate mapping of RNNs on neuromorphic hardware with adaptive spiking neurons. In 2024 International Conference on Neuromorphic Systems (ICONS). IEEE.
+### Code for the paper:
+[Boeshertz, G., Indiveri, G., Nair, M., & Renner, A. (2024). Accurate mapping of RNNs on neuromorphic hardware with adaptive spiking neurons. In 2024 International Conference on Neuromorphic Systems (ICONS). IEEE.
 ](https://ieeexplore.ieee.org/abstract/document/10766521)
 
 
