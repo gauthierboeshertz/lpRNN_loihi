@@ -3,6 +3,7 @@ File containing scripts to download audio from various datasets
 
 Also has tools to convert audio into numpy
 """
+import numpy as np
 from tqdm import tqdm
 import requests
 import math
