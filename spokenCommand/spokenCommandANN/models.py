@@ -27,7 +27,6 @@ class small_lprnn_net(nn.Module):
                     activation_max=6,
                     dev='cuda',
                     use_lstm=False,
-                    load_mel=False,
                     use_bias=True):
 	
 		super().__init__()
@@ -35,7 +34,6 @@ class small_lprnn_net(nn.Module):
 		self.num_layers = nlayers
 		self.hidden_size = nunits
 		self.retention_ratio = ret_ratio
-		self.load_mel = load_mel
 		self.layers = []
 		activation = ClampedRelu(activation_max)
 		self.use_lstm = use_lstm
@@ -62,7 +60,7 @@ class small_lprnn_net(nn.Module):
 	
 	def output(self,x):
 		x = self.out(x)
-		x = torch.mean(x[:,x.shape[1]//2:],dim=1)
+		x = torch.mean(x,dim=1)
 		return x
 	
 	def quantize(self):

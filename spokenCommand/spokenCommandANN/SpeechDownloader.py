@@ -10,6 +10,26 @@ import math
 import os
 import tarfile
 import pandas as pd
+import librosa 
+
+def WAV2Numpy(folder, sr = None):
+    """
+    Recursively converts WAV to numpy arrays. Deletes the WAV files in the process
+    
+    folder - folder to convert.
+    """
+    allFiles = []
+    for root, dirs, files in os.walk(folder):
+        allFiles += [os.path.join(root, f) for f in files if f.endswith('.wav')]
+
+    for file in tqdm(allFiles):
+        y, sr = librosa.load(file, sr=None)
+        
+        #if we want to write the file later
+        #librosa.output.write_wav('file.wav', y, sr, norm=False)
+        
+        np.save(file+'.npy', y)
+        os.remove(file)
 
 
 ###################

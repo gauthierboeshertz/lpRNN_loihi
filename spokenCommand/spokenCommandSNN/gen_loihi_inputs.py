@@ -32,14 +32,14 @@ def gen_inputs_for_loihi(input_idx):
     out_brian_spikes = brian_net.layers[-1].spikes
     out_brian_in = brian_net.layers[-1].i_in
 
-    pred_brian_fb = np.argmax(np.mean(out_brian_fb[:,out_brian_fb.shape[1]//2:],axis=1))
-    pred_brian_ip = np.argmax(np.mean(out_brian_ip[:,out_brian_ip.shape[1]//2:],axis=1))
-    pred_brian_spikes = np.argmax(out_brian_spikes[:,out_brian_spikes.shape[1]//2:].sum(axis=1))
-    pred_brian_in = np.argmax(np.mean(out_brian_in[:,out_brian_in.shape[1]//2:],axis=1))
+    pred_brian_fb = np.argmax(np.mean(out_brian_fb,axis=1))
+    pred_brian_ip = np.argmax(np.mean(out_brian_ip,axis=1))
+    pred_brian_spikes = np.argmax(out_brian_spikes.sum(axis=1))
+    pred_brian_in = np.argmax(np.mean(out_brian_in,axis=1))
 
     ann = ANNFromWeights(ts_ann=ts_ann,a=a,Iin=Iin,weights=weights) 
     ann.run(ip)
-    out_ann = np.argmax(np.mean(ann.layers[-1].state[ann.layers[-1].state.shape[0]//2:,:],axis=0))
+    out_ann = np.argmax(np.mean(ann.layers[-1].state,axis=0))
     return spikes,pred_brian_fb,out_ann,labels[input_idx],pred_brian_spikes,pred_brian_ip,pred_brian_in,input_idx
 
 
@@ -73,35 +73,22 @@ parser.add_argument('--factor',type=float,default=-1,#default=349525.3333333333,
                     help='gsc task')
 parser.add_argument('--optimal_snn',action='store_true')
 parser.add_argument('--augment',action='store_true')
-parser.add_argument('--hop_length',type=int,default=128,help='gsc task')
-parser.add_argument('--win_length',type=int,default=1024,help='gsc task')
-parser.add_argument('--n_fft',type=int,default=1024,help='gsc task')
-parser.add_argument('--no_bias',action='store_true')
-parser.add_argument('--n_mels',type=int,default=80)
-parser.add_argument('--lpff_size',type=int,default=64)
+parser.add_argument('--lpff_size',type=int,default=128)
 
 args =parser.parse_args()
 
 print(args)
-data_name = f"hop_{args.hop_length}_win_{args.win_length}_n_ftt_{args.n_fft}"+(f"n_mels_{args.n_mels}" if args.n_mels != 80 else "")
 
 nunits = str(args.nunits)
+model_save_path = './data/'+ 'QlpRNN_'+str(args.lpff_size)+"_"+str(args.nlayers)+'_'+str(args.nunits)+'_'+str(args.ret_ratio)+'_'+str(args.frac_bits)+'_nWTH_'+str(args.wth) +'_'+str(args.task_n_words)+("_augment" if args.augment else "")+'.pth'
 
-if args.task_n_words == 12:
-    model_save_path = '../spokenCommandSNN/data/'  +'QlpRNN_'+str(args.lpff_size)+"_"+str(args.nlayers)+'_'+str(args.nunits)+'_'+str(args.ret_ratio)+'_'+str(args.frac_bits)+'_nWTH_'+str(args.wth) +'_'+str(args.task_n_words)+("_augment" if args.augment else "")+("_no_bias_" if args.no_bias else "" )+data_name+'.pth'
-else:
-    if args.wth >=0:
-        model_save_path = 'data/'+'QlpRNN_'+str(args.nlayers)+'_'+str(args.nunits)+'_'+str(args.ret_ratio)+'_'+str(args.frac_bits)+'_nWTH_'+str(args.wth) +'_'+str(args.task_n_words)+("_augment" if args.augment else "")+data_name+'.pth'
-    else:
-        model_save_path = 'data/'+'QlpRNN_'+str(args.nlayers)+'_'+str(args.nunits)+'_'+str(args.ret_ratio)+'_'+str(args.frac_bits)+'_actreg'+str(args.activity_reg_weight)  +'_'+str(args.task_n_words)+'.pth'
 with open(model_save_path, 'rb') as handle:
     weights = pickle.load(handle)
 print('Loaded weights from '+model_save_path)
 print('weights',weights['order'])
 
-
-input_path = 'data/'+'test_data_'+str(args.task_n_words)+data_name+'.npy'
-labels_path = 'data/'+'test_labels_'+str(args.task_n_words)+data_name+'.npy'
+input_path = 'data/'+'test_data_'+str(args.task_n_words)+'.npy'
+labels_path = 'data/'+'test_labels_'+str(args.task_n_words)+'.npy'
 
 inputs = np.load(input_path)
 print('Loaded inputs from ')

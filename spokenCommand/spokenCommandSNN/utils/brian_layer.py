@@ -1,11 +1,67 @@
 import numpy as np
-from .loihi_tools.weight_tools import *
 from .loihi_equations import loihi_eq_dict, loihi_syn_dict, set_params,add_clipping_to_NeuronGroup,add_rounding_to_NeuronGroup,add_relu_to_NeuronGroup
 from math import isclose
 import copy
 from brian2.only import *
 
 
+def calculate_effective_weight(numWeightBits=8, IS_MIXED=0, weight=255, weightExponent=0):
+    '''
+    calculates and prints the actual weight of a synapse after discretization
+    Please compare with the following documentation file: /docs/connection.html
+    :param numWeightBits: number of  weight bits
+    :param IS_MIXED: is the sign mode mixed (1)? Set to 0 if sign mode is exc or inh.
+    :param weight: the weight
+    :param weightExponent: weight exponent
+    :return: the effective weight
+    '''
+    numLsbBits = 8 - numWeightBits - IS_MIXED
+    try:
+        actWeight = (weight >> numLsbBits) << numLsbBits
+    except  TypeError:
+
+        actWeight = np.left_shift(np.right_shift(np.asarray(weight, dtype=int), numLsbBits), numLsbBits)
+
+    # print('original weight:', weight)
+    # print('actual weight:', actWeight)
+    # print('num lsb:', numLsbBits)
+    # print('weight (with exponent):', actWeight * 2 ** weightExponent)
+    # print('weight effect on current (with exponent):', actWeight * 2 ** (6 + weightExponent))
+    return actWeight
+
+
+def calculate_mant_exp(value, precision=8, name=""):
+    """
+    This function calculates the exponent and mantissa from a desired value. Can e.g. be used for weights.
+    If used for weights: Please use calculate_effective_weight to calculate
+     the effective weight also taking into account the precision.
+
+    Important: This is based on a very simple idea to maximize the precision.
+     However, it does not replace manual checking of your weights
+     (E.g. instead of letting them go from 0-300, you should restrict them to 0-255,
+     as you will loose precision otherwise)
+
+    Also, be careful when using this with plastic weights.
+    Otherwise your range might be limited to the initial weight range.
+
+    :param value: the value for which you want to calculate mantissa and exponent
+    :param precision: the allowed precision in bits for the mantissa
+    :return: mantissa, exponent
+    """
+    value = np.asarray(value)
+    # print('desired value:', value)
+    exponent = 0
+    while np.abs(np.max(value)) >= (2 ** precision) and not exponent >= 8:
+        value = value / 2
+        exponent += 1
+
+    while np.abs(np.max(value)) < (2 ** precision / 2) and np.abs(np.max(value)) != 0 and not exponent <= -8:
+        value = value * 2
+        exponent += -1
+
+    value = np.asarray(np.round(value), dtype=int)
+    # print('actual value of', name, ':', value * 2 ** exponent, 'mantissa:', value, 'exponent:', exponent)
+    return value, exponent
 
 class BrianLayer:
     def __init__(self, mode, size, ts_ann, Iin,

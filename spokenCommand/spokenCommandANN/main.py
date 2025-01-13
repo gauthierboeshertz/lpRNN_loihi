@@ -9,20 +9,17 @@ os.environ['PYTHONHASHSEED'] = "0"
 # Following stderr write disables "Using tensorflow backend" messages
 import warnings 
 warnings.filterwarnings(action='once')
-
 from layers.q_utils import quantize_weight,rsetattr,rgetattr
 import os
 import math
 import argparse
 import torch
-import speech_dataset
 import numpy as np
 import models
-import SpeechDownloader
-from torch.utils.data import DataLoader
 import torch.nn as nn
 import torch.nn.functional as F
-from speech_datasetv2 import GSC_dataloaders
+import speech_datasetv2 
+import speech_dataset
 from layers import *
 import random
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -118,9 +115,6 @@ def validate(model,loader,criterion):
 def run_test_case(args,winning_ticket_iter=-1,first_initialization=None,wth_mask=None):
 
     set_seed(args.seed)
-    def seed_worker(worker_id):
-        worker_seed = torch.initial_seed() % 2**32
-        set_seed(worker_seed)
 
     ret_ratio= args.ret_ratio
 
@@ -132,8 +126,7 @@ def run_test_case(args,winning_ticket_iter=-1,first_initialization=None,wth_mask
         if args.use_lstm:
             model_path = 'weights'+'/lstm_' + str(args.nlayers)+ '_' + str(args.nunits) +'_nWTH_'+str(winning_ticket_iter) +"_"+vers_str+'_'+str(args.task_n_words)+'.pth'
         else:
-            data_name = f"hop_{args.hop_length}_win_{args.win_length}_n_ftt_{args.n_fft}"
-            model_path = 'weights'+'/'+args.model +"_" +str(args.lpff_size)+ '_' + str(args.nlayers)+ '_' + str(args.nunits) +'intbits_'+str(args.int_bits)+'frac_bits'+ str(args.frac_bits)+str(ret_ratio) +'_nWTH_'+str(winning_ticket_iter) +'_'+str(args.task_n_words)+("_augment" if args.augment else "")+data_name+("no_bias" if  args.no_bias else "")+f"seed{args.seed}"+'.pth'
+            model_path = 'weights'+'/'+args.model +"_" +str(args.lpff_size)+ '_' + str(args.nlayers)+ '_' + str(args.nunits) +'intbits_'+str(args.int_bits)+'frac_bits'+ str(args.frac_bits)+str(ret_ratio) +'_nWTH_'+str(winning_ticket_iter) +'_'+str(args.task_n_words)+("_augment" if args.augment else "")+f"seed{args.seed}"+'.pth'
 
     # Speech Data Generator 
     print("model path",model_path)
@@ -143,14 +136,13 @@ def run_test_case(args,winning_ticket_iter=-1,first_initialization=None,wth_mask
                                 ret_ratio=ret_ratio,
                                 int_bits=args.int_bits,
                                 frac_bits=args.frac_bits,
-                                input_size=80,
+                                input_size=40,
                                 lpff_size=args.lpff_size,
                                 nunits=args.nunits,
                                 nlayers=args.nlayers,
                                 dev=DEVICE,
-                                load_mel=False,
                                 use_lstm=args.use_lstm,
-                                use_bias=not args.no_bias)
+                                use_bias=True)
     
     previous_mask = None
     print(model)
@@ -172,29 +164,21 @@ def run_test_case(args,winning_ticket_iter=-1,first_initialization=None,wth_mask
                 rsetattr(model,name+'.data',weight*previous_mask[name].to(DEVICE))
     
     if args.v2 and args.task_n_words==35:
-        train_loader, val_loader, test_loader = GSC_dataloaders('data/',args=args)
+        train_loader, val_loader, test_loader = speech_datasetv2.get_dataloaders('data/',args=args)
     else:
         print(f"Using {args.task_n_words} words "+("v2" if args.v2 else "v1"))
-        gscInfo, nCategs = SpeechDownloader.PrepareGoogleSpeechCmd(version=2 if args.v2 else 1, task = '35word' if args.task_n_words == 36 else '12cmd', base_path_prefix="data/")
-        trainDs   = speech_dataset.SpeechDataset(gscInfo['train']['files']
-                                            ,gscInfo['train']['labels'],create_all_mels=False,train_or_val='train',hop_length=args.hop_length,n_fft=args.n_fft)
-        valDs   = speech_dataset.SpeechDataset(gscInfo['val']['files']
-                                            ,gscInfo['val']['labels'],create_all_mels=False,train_or_val='val',hop_length=args.hop_length,n_fft=args.n_fft)
-        test_ds   = speech_dataset.SpeechDataset(gscInfo['test']['files']
-                                            ,gscInfo['test']['labels'],create_all_mels=False,train_or_val='val',hop_length=args.hop_length,n_fft=args.n_fft)
-
-        g = torch.Generator()
-        g.manual_seed(0)
-
-        train_loader = DataLoader(trainDs,batch_size=args.batch_size,num_workers=8,drop_last=False,shuffle=True,pin_memory=True,generator=g,worker_init_fn=seed_worker)
-        val_loader = DataLoader(valDs,batch_size=args.batch_size,shuffle=False,num_workers=8,pin_memory=False,generator=g)
-        test_loader = DataLoader(test_ds,batch_size=args.batch_size,shuffle=False,num_workers=8,pin_memory=False,generator=g)
-        
+        train_loader, val_loader, test_loader = speech_dataset.get_dataloaders('data/',args=args)
     print("TRAIN LOADER SIZE",len(train_loader))
 
     optimizer = torch.optim.AdamW(lr=args.lr,params = model.parameters(),weight_decay=args.weight_decay)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer=optimizer,
+            mode="max",
+            factor=0.7,
+            patience=1,
+            min_lr=1e-6,
+        )
     
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.7, threshold=0.1,patience=2,min_lr=0.00001)
     last_lr = scheduler.get_last_lr()
     max_val_acc = -1
     best_model = None
@@ -217,7 +201,7 @@ def run_test_case(args,winning_ticket_iter=-1,first_initialization=None,wth_mask
             max_val_acc = val_acc
             best_model = model.state_dict()
         
-        scheduler.step(val_loss)
+        scheduler.step(val_acc/100)
 
     print('FINISHED TRAINING')
     model.load_state_dict(best_model)
@@ -257,7 +241,6 @@ if __name__ == '__main__':
     parser.add_argument('--frac_bits', type=int, default=3,
                         help='NUmber of fractional weight bits')
     parser.add_argument('--use_lstm', action='store_true')
-    parser.add_argument('--no_bias',  action='store_true',)
     parser.add_argument('--lr', type=float, default=0.001,
                         help='Learning rate')
     parser.add_argument('--clipvalue', type=float, default=5,
@@ -275,9 +258,6 @@ if __name__ == '__main__':
     parser.add_argument('--task_n_words',type=int,default=36,help='gsc task')
     parser.add_argument('--v2',action="store_true")
     parser.add_argument('--print_freq',type=int,default=10)
-    parser.add_argument('--hop_length',type=int,default=128)
-    parser.add_argument('--n_fft',type=int,default=1024)
-    parser.add_argument('--win_length',type=int,default=1024)
     parser.add_argument('--lpff_size',type=int,default=128)
     parser.add_argument('--ret_ratio',type=float,default=0.8)
     parser.add_argument('--weight_decay',type=float,default=1e-5)
